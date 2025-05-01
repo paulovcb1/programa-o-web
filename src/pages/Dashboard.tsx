@@ -4,6 +4,7 @@ import DashboardSummary from '../components/DashboardSummary';
 import TransactionList from '../components/TransactionList';
 import TransactionCharts from '../components/TransactionCharts';
 import TransactionForm from '../components/TransactionForm';
+import Modal from '../components/Modal';
 import { Transaction } from '../types/transaction';
 
 const Dashboard: React.FC = () => {
@@ -17,7 +18,7 @@ const Dashboard: React.FC = () => {
   } = useTransactions();
   
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [filter, setFilter] = useState<'all' | 'income' | 'expense'>('all');
 
   useEffect(() => {
@@ -31,15 +32,14 @@ const Dashboard: React.FC = () => {
 
   const handleEdit = (transaction: Transaction) => {
     setEditingTransaction(transaction);
-    setIsEditing(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setIsModalOpen(true);
   };
 
   const handleUpdate = async (formData: any) => {
     if (editingTransaction) {
       await updateTransaction(editingTransaction.id, formData);
       setEditingTransaction(null);
-      setIsEditing(false);
+      setIsModalOpen(false);
       await getTransactions();
     }
   };
@@ -51,9 +51,9 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const handleCancelEdit = () => {
+  const handleCloseModal = () => {
     setEditingTransaction(null);
-    setIsEditing(false);
+    setIsModalOpen(false);
   };
 
   return (
@@ -83,23 +83,19 @@ const Dashboard: React.FC = () => {
         </div>
       )}
       
-      {isEditing && editingTransaction && (
-        <div className="mb-6">
+      <Modal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        title="Editar Transação"
+      >
+        {editingTransaction && (
           <TransactionForm 
             onSubmit={handleUpdate} 
             initialData={editingTransaction}
             isEditing={true}
           />
-          <div className="flex justify-end mt-2">
-            <button 
-              onClick={handleCancelEdit}
-              className="text-sm text-gray-600 hover:text-gray-900 underline"
-            >
-              Cancelar edição
-            </button>
-          </div>
-        </div>
-      )}
+        )}
+      </Modal>
       
       <DashboardSummary transactions={filteredTransactions} isLoading={loading} />
       
