@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Transaction, TransactionFormData } from '../types/transaction';
 import { api } from '../services/api';
+import { useAuth } from './AuthContext';
 
 interface TransactionContextProps {
   transactions: Transaction[];
@@ -31,15 +32,18 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
 
   const getTransactions = async () => {
+    if (!user) return;
+    
     setLoading(true);
     setError(null);
     try {
-      const data = await api.getTransactions();
+      const data = await api.getTransactions(user.uid);
       setTransactions(data);
     } catch (err) {
-      setError('Failed to fetch transactions');
+      setError('Falha ao carregar transações');
       console.error(err);
     } finally {
       setLoading(false);
@@ -47,24 +51,28 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
   };
 
   const getTransaction = async (id: string): Promise<Transaction | undefined> => {
+    if (!user) return undefined;
+    
     try {
-      const transaction = await api.getTransaction(id);
+      const transaction = await api.getTransaction(id, user.uid);
       return transaction;
     } catch (err) {
-      setError('Failed to fetch transaction');
+      setError('Falha ao carregar transação');
       console.error(err);
       return undefined;
     }
   };
 
   const addTransaction = async (transaction: TransactionFormData) => {
+    if (!user) return;
+    
     setLoading(true);
     setError(null);
     try {
-      const newTransaction = await api.createTransaction(transaction);
+      const newTransaction = await api.createTransaction(transaction, user.uid);
       setTransactions(prev => [newTransaction, ...prev]);
     } catch (err) {
-      setError('Failed to add transaction');
+      setError('Falha ao adicionar transação');
       console.error(err);
     } finally {
       setLoading(false);
@@ -72,15 +80,17 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
   };
 
   const updateTransaction = async (id: string, transaction: TransactionFormData) => {
+    if (!user) return;
+    
     setLoading(true);
     setError(null);
     try {
-      const updatedTransaction = await api.updateTransaction(id, transaction);
+      const updatedTransaction = await api.updateTransaction(id, transaction, user.uid);
       setTransactions(prev => 
         prev.map(t => t.id === id ? updatedTransaction : t)
       );
     } catch (err) {
-      setError('Failed to update transaction');
+      setError('Falha ao atualizar transação');
       console.error(err);
     } finally {
       setLoading(false);
@@ -88,13 +98,15 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
   };
 
   const deleteTransaction = async (id: string) => {
+    if (!user) return;
+    
     setLoading(true);
     setError(null);
     try {
-      await api.deleteTransaction(id);
+      await api.deleteTransaction(id, user.uid);
       setTransactions(prev => prev.filter(t => t.id !== id));
     } catch (err) {
-      setError('Failed to delete transaction');
+      setError('Falha ao excluir transação');
       console.error(err);
     } finally {
       setLoading(false);
@@ -102,8 +114,12 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
   };
 
   useEffect(() => {
-    getTransactions();
-  }, []);
+    if (user) {
+      getTransactions();
+    } else {
+      setTransactions([]);
+    }
+  }, [user]);
 
   return (
     <TransactionContext.Provider

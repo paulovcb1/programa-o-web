@@ -12,39 +12,57 @@ import {
   deleteDoc,
   query,
   orderBy,
-  Timestamp 
+  where
 } from 'firebase/firestore';
+import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 
+// Load environment variables
 dotenv.config();
 
+// Firebase config using environment variables
 const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY,
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.FIREBASE_PROJECT_ID,
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.FIREBASE_APP_ID
+  apiKey: process.env.VITE_FIREBASE_API_KEY,
+  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.VITE_FIREBASE_APP_ID
 };
 
+// Initialize Firebase
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Middleware
 app.use(cors());
 app.use(express.json());
 
+// Get all transactions for a user
 app.get('/api/transactions', async (req, res) => {
   try {
+    console.log(req.headers['user-id']);
+    const userId = req.headers['user-id'];
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID is required' });
+    }
+
     const transactionsCol = collection(db, 'transactions');
-    const transactionsQuery = query(transactionsCol, orderBy('date', 'desc'));
+    const transactionsQuery = query(
+      transactionsCol,
+      where('userId', '==', userId),
+      orderBy('date', 'desc')
+    );
+    
     const snapshot = await getDocs(transactionsQuery);
     const transactions = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
+    
     res.status(200).json(transactions);
   } catch (error) {
     console.error('Error fetching transactions:', error);
@@ -52,24 +70,42 @@ app.get('/api/transactions', async (req, res) => {
   }
 });
 
+// Get a single transaction
 app.get('/api/transactions/:id', async (req, res) => {
+  
   try {
+    const userId = req.headers['user-id'];
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID is required' });
+    }
+
     const docRef = doc(db, 'transactions', req.params.id);
     const docSnap = await getDoc(docRef);
     
-    if (docSnap.exists()) {
-      res.status(200).json({ id: docSnap.id, ...docSnap.data() });
-    } else {
-      res.status(404).json({ error: 'Transaction not found' });
+    if (!docSnap.exists()) {
+      return res.status(404).json({ error: 'Transaction not found' });
     }
+
+    const transaction = docSnap.data();
+    if (transaction.userId !== userId) {
+      return res.status(403).json({ error: 'Unauthorized access' });
+    }
+
+    res.status(200).json({ id: docSnap.id, ...transaction });
   } catch (error) {
     console.error('Error fetching transaction:', error);
     res.status(500).json({ error: 'Failed to fetch transaction' });
   }
 });
 
+// Create a new transaction
 app.post('/api/transactions', async (req, res) => {
   try {
+    const userId = req.headers['user-id'];
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID is required' });
+    }
+
     const { type, amount, description, category, date } = req.body;
     
     const newTransaction = {
@@ -78,6 +114,7 @@ app.post('/api/transactions', async (req, res) => {
       description,
       category,
       date,
+      userId,
       createdAt: new Date().toISOString()
     };
     
@@ -89,10 +126,27 @@ app.post('/api/transactions', async (req, res) => {
   }
 });
 
+// Update a transaction
 app.put('/api/transactions/:id', async (req, res) => {
   try {
-    const { type, amount, description, category, date } = req.body;
+    const userId = req.headers['user-id'];
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID is required' });
+    }
+
     const docRef = doc(db, 'transactions', req.params.id);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    const transaction = docSnap.data();
+    if (transaction.userId !== userId) {
+      return res.status(403).json({ error: 'Unauthorized access' });
+    }
+
+    const { type, amount, description, category, date } = req.body;
     
     const updatedData = {
       type,
@@ -104,16 +158,33 @@ app.put('/api/transactions/:id', async (req, res) => {
     };
     
     await updateDoc(docRef, updatedData);
-    res.status(200).json({ id: req.params.id, ...updatedData });
+    res.status(200).json({ id: req.params.id, ...updatedData, userId });
   } catch (error) {
     console.error('Error updating transaction:', error);
     res.status(500).json({ error: 'Failed to update transaction' });
   }
 });
 
+// Delete a transaction
 app.delete('/api/transactions/:id', async (req, res) => {
   try {
+    const userId = req.headers['user-id'];
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID is required' });
+    }
+
     const docRef = doc(db, 'transactions', req.params.id);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    const transaction = docSnap.data();
+    if (transaction.userId !== userId) {
+      return res.status(403).json({ error: 'Unauthorized access' });
+    }
+
     await deleteDoc(docRef);
     res.status(200).json({ id: req.params.id, message: 'Transaction deleted' });
   } catch (error) {
