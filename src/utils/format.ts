@@ -1,13 +1,11 @@
 import { format, parseISO, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { Transaction } from '../types/transaction';
 
-export const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat('en-US', {
+export const formatCurrency = (value: number): string => {
+  return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+    currency: 'BRL'
+  }).format(value);
 };
 
 export const formatDate = (dateString: string): string => {

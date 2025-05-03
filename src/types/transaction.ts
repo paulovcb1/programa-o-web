@@ -1,13 +1,13 @@
 export type TransactionType = 'income' | 'expense';
 
 export interface Transaction {
-  id: string;
-  type: TransactionType;
-  amount: number;
+  id?: string;
   description: string;
+  amount: number;
   category: string;
   date: string;
-  createdAt: string;
+  type: 'expense' | 'income';
+  userId?: string;
 }
 
 export interface TransactionFormData {
