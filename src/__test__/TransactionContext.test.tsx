@@ -1,8 +1,21 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { TransactionProvider, useTransactions } from '../context/TransactionContext';
+import { AuthProvider } from '../context/AuthContext';
 import { api } from '../services/api';
 import { Transaction } from '../types/transaction';
+
+// Mock firebase auth
+jest.mock('firebase/auth', () => ({
+  getAuth: jest.fn(() => ({})),
+  onAuthStateChanged: jest.fn((auth, callback) => {
+    callback({ uid: 'test-user-id', email: 'test@example.com' });
+    return jest.fn(); // unsubscribe function
+  }),
+  createUserWithEmailAndPassword: jest.fn(),
+  signInWithEmailAndPassword: jest.fn(),
+  signOut: jest.fn(),
+}));
 
 jest.mock('../services/api');
 
@@ -51,9 +64,11 @@ describe('TransactionContext', () => {
     (api.getTransactions as jest.Mock).mockResolvedValue(mockTransactions);
 
     render(
-      <TransactionProvider>
-        <TestComponent />
-      </TransactionProvider>
+      <AuthProvider>
+        <TransactionProvider>
+          <TestComponent />
+        </TransactionProvider>
+      </AuthProvider>
     );
 
     expect(screen.getByText(/Loading.../i)).toBeInTheDocument();
@@ -68,9 +83,11 @@ describe('TransactionContext', () => {
     (api.getTransactions as jest.Mock).mockRejectedValue(new Error('Failed to fetch'));
 
     render(
-      <TransactionProvider>
-        <TestComponent />
-      </TransactionProvider>
+      <AuthProvider>
+        <TransactionProvider>
+          <TestComponent />
+        </TransactionProvider>
+      </AuthProvider>
     );
 
     expect(screen.getByText(/Loading.../i)).toBeInTheDocument();
