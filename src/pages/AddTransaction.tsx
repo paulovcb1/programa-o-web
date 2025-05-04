@@ -15,7 +15,7 @@ const AddTransaction: React.FC = () => {
 
   return (
     <div className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Add New Transaction</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Adicionar nova Transação</h1>
       
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">

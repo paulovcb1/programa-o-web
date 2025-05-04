@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Transaction } from '../types/transaction';
 import { formatCurrency, formatDate } from '../utils/format';
-import { Edit2, Trash2, ArrowDown, ArrowUp, Filter } from 'lucide-react';
+import { Edit2, Trash2, ArrowDown, ArrowUp } from 'lucide-react';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -17,10 +17,38 @@ const TransactionList: React.FC<TransactionListProps> = ({
   isLoading
 }) => {
   const [filter, setFilter] = useState<'all' | 'income' | 'expense'>('all');
+  const [selectedMonth, setSelectedMonth] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+
+  // Gerar opções de meses únicos
+  const months = useMemo(() => {
+    const uniqueMonths = Array.from(
+      new Set(transactions.map(transaction => transaction.date.slice(0, 7)))
+    );
+    return uniqueMonths.sort();
+  }, [transactions]);
+
+  // Gerar opções de categorias únicas
+  const categories = useMemo(() => {
+    const uniqueCategories = Array.from(
+      new Set(transactions.map(transaction => transaction.category))
+    );
+    return uniqueCategories.sort();
+  }, [transactions]);
+
+  const handleMonthChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedMonth(event.target.value);
+  };
+
+  const handleCategoryChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedCategory(event.target.value);
+  };
 
   const filteredTransactions = transactions.filter(transaction => {
-    if (filter === 'all') return true;
-    return transaction.type === filter;
+    const matchesType = filter === 'all' || transaction.type === filter;
+    const matchesMonth = selectedMonth === 'all' || transaction.date.startsWith(selectedMonth);
+    const matchesCategory = selectedCategory === 'all' || transaction.category === selectedCategory;
+    return matchesType && matchesMonth && matchesCategory;
   });
 
   if (isLoading) {
@@ -39,17 +67,61 @@ const TransactionList: React.FC<TransactionListProps> = ({
     <div className="bg-white rounded-lg shadow-md p-6 mb-6">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-semibold">Transações</h2>
-        <div className="flex items-center space-x-2">
-          <Filter className="h-4 w-4 text-gray-500" />
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value as 'all' | 'income' | 'expense')}
-            className="p-1 border border-gray-300 rounded text-sm"
-          >
-            <option value="all">Todas</option>
-            <option value="income">Receitas</option>
-            <option value="expense">Despesas</option>
-          </select>
+        <div className="flex items-center space-x-4">
+          <div>
+            <label htmlFor="month-select" className="block text-sm font-medium text-gray-700">
+              Mês
+            </label>
+            <select
+              id="month-select"
+              value={selectedMonth}
+              onChange={handleMonthChange}
+              className="p-1 border border-gray-300 rounded text-sm"
+            >
+              <option value="all">Todos os Meses</option>
+              {months.map(month => (
+                <option key={month} value={month}>
+                  {new Date(`${month}-01`).toLocaleDateString('pt-BR', {
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="category-select" className="block text-sm font-medium text-gray-700">
+              Categoria
+            </label>
+            <select
+              id="category-select"
+              value={selectedCategory}
+              onChange={handleCategoryChange}
+              className="p-1 border border-gray-300 rounded text-sm"
+            >
+              <option value="all">Todas</option>
+              {categories.map(category => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="type-select" className="block text-sm font-medium text-gray-700">
+              Tipo
+            </label>
+            <select
+              id="type-select"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value as 'all' | 'income' | 'expense')}
+              className="p-1 border border-gray-300 rounded text-sm"
+            >
+              <option value="all">Todas</option>
+              <option value="income">Receitas</option>
+              <option value="expense">Despesas</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -100,7 +172,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
                     </span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(transaction.date)}
+                    {transaction.date ? formatDate(transaction.date) : 'Data inválida'}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">
                     {transaction.description}
@@ -118,6 +190,8 @@ const TransactionList: React.FC<TransactionListProps> = ({
                       onClick={() => onEdit(transaction)}
                       className="text-blue-600 hover:text-blue-900 mr-3"
                       title="Editar"
+                      aria-label={`Editar ${transaction.description}`}
+                      data-testid={`edit-button-${transaction.id}`}
                     >
                       <Edit2 className="h-4 w-4" />
                     </button>

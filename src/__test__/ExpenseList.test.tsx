@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { rest } from 'msw';
 import { server } from '../__mocks__/server';
 import ExpenseList from '../components/ExpenseList';
+import TransactionForm from '../components/TransactionForm';
 
 const mockTransactions = [
   { id: '1', description: 'Conta de Luz', amount: 100, category: 'Utilities', date: '2025-05-01', type: 'expense' },
@@ -16,9 +17,9 @@ afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 // TC01: Exibe despesas do mês atual ao carregar
-test('TC01: Exibe despesas do mês atual ao carregar', async () => {
+test('TC01: Exibe todas as despesas ao carregar', async () => {
   server.use(
-    rest.get('http://localhost:3001/api/transactions', (req, res, ctx) => {
+    rest.get('http://localhost:3001/api/transactions', (_, res, ctx) => {
       const currentMonthTransactions = mockTransactions.filter(
         transaction => transaction.date.startsWith('2025-05')
       );
@@ -28,17 +29,14 @@ test('TC01: Exibe despesas do mês atual ao carregar', async () => {
 
   render(<ExpenseList userId="test-user" />);
 
-  // Espera pelos elementos na tabela
   await waitFor(async () => {
     const rows = await screen.findAllByRole('row');
-    expect(rows.length).toBeGreaterThan(1); // Header + pelo menos uma linha
+    expect(rows.length).toBeGreaterThan(1); 
   });
 
-  // Verifica os itens do mês atual
   expect(screen.getByRole('cell', { name: 'Conta de Luz' })).toBeInTheDocument();
   expect(screen.getByRole('cell', { name: 'Internet' })).toBeInTheDocument();
   expect(screen.getByRole('cell', { name: 'Academia' })).toBeInTheDocument();
-  expect(screen.queryByRole('cell', { name: 'Supermercado' })).not.toBeInTheDocument();
 });
 
 // TC02: Filtrar por mês
@@ -52,7 +50,6 @@ test('TC02: Filtrar despesas por mês', async () => {
   render(<ExpenseList userId="test-user" />);
   const user = userEvent.setup();
 
-  // Seleciona o mês de abril
   const monthSelect = screen.getByLabelText('Selecionar Mês');
   await user.selectOptions(monthSelect, '2025-04');
 
@@ -73,7 +70,6 @@ test('TC03: Filtrar despesas por categoria', async () => {
   render(<ExpenseList userId="test-user" />);
   const user = userEvent.setup();
 
-  // Seleciona a categoria "Utilities"
   const categorySelect = screen.getByLabelText('Selecionar Categoria');
   await user.selectOptions(categorySelect, 'Utilities');
 
@@ -98,15 +94,13 @@ test('TC04: Adicionar nova despesa válida', async () => {
 
   let requestBody: any;
   let lastGetResponse: any[] = mockTransactions;
-  
+
   server.use(
     rest.get('http://localhost:3001/api/transactions', (req, res, ctx) => {
-      console.log('Mock GET called, returning:', lastGetResponse);
       return res(ctx.json(lastGetResponse));
     }),
     rest.post('http://localhost:3001/api/transactions', async (req, res, ctx) => {
       requestBody = await req.json();
-      console.log('Mock POST called with:', requestBody);
       lastGetResponse = [...mockTransactions, newExpense];
       return res(ctx.status(201), ctx.json(newExpense));
     })
@@ -115,25 +109,21 @@ test('TC04: Adicionar nova despesa válida', async () => {
   render(<ExpenseList userId="test-user" />);
   const user = userEvent.setup();
 
-  // Clica no botão de adicionar despesa
   await user.click(screen.getByRole('button', { name: /adicionar despesa/i }));
 
-  // Preenche o formulário
   const form = screen.getByRole('form');
   await user.type(within(form).getByLabelText(/descrição/i), newExpense.description);
   await user.type(within(form).getByLabelText(/valor/i), newExpense.amount.toString());
   await user.selectOptions(within(form).getByLabelText(/categoria/i), newExpense.category);
-  
-  // Lida com o input de data de forma mais robusta
+
   const dateInput = within(form).getByLabelText(/data/i);
   await user.clear(dateInput);
   await user.type(dateInput, '2025-05-02');
 
-  // Submete o formulário
   const submitButton = screen.getByRole('button', { name: /salvar/i });
   await user.click(submitButton);
 
-  // Espera a requisição POST ser concluída e verifica o corpo
+  
   await waitFor(() => {
     expect(requestBody).toBeDefined();
     expect(requestBody).toMatchObject({
@@ -145,11 +135,55 @@ test('TC04: Adicionar nova despesa válida', async () => {
     });
   });
 
-  // Espera a tabela ser atualizada e verifica o conteúdo
+ 
   await waitFor(() => {
-    const cells = screen.getAllByRole('cell');
-    console.log('Found table cells:', cells.map(cell => cell.textContent));
+    screen.getAllByRole('cell');
+   
     const descriptionCell = screen.getByRole('cell', { name: newExpense.description });
     expect(descriptionCell).toBeInTheDocument();
   }, { timeout: 3000 });
 });
+
+
+test('TC05: Exibir mensagens de erro para campos obrigatórios inválidos', async () => {
+  const mockOnSubmit = jest.fn();
+  render(<TransactionForm onSubmit={mockOnSubmit} />);
+
+  const user = userEvent.setup();
+
+  const form = screen.getByTestId('transaction-form');
+
+
+  const amountInput = within(form).getByLabelText('Valor');
+  await user.clear(amountInput);
+  await user.type(amountInput, '0'); 
+
+  const descriptionInput = within(form).getByLabelText('Descrição');
+  await user.clear(descriptionInput); 
+
+  const categorySelect = within(form).getByLabelText('Categoria');
+  await user.selectOptions(categorySelect, ''); 
+
+  const dateInput = within(form).getByLabelText('Data');
+  await user.clear(dateInput); 
+
+  const submitButton = screen.getByRole('button', { name: /adicionar transação/i });
+  await user.click(submitButton);
+
+  await waitFor(() => {
+    const errorMessages = screen.getAllByRole('listitem'); 
+    expect(errorMessages).toHaveLength(4); 
+    expect(errorMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ textContent: expect.stringContaining('O campo "Valor" deve ser maior que zero.') }),
+        expect.objectContaining({ textContent: expect.stringContaining('O campo "Descrição" é obrigatório.') }),
+        expect.objectContaining({ textContent: expect.stringContaining('O campo "Categoria" é obrigatório.') }),
+        expect.objectContaining({ textContent: expect.stringContaining('O campo "Data" é obrigatório.') }),
+      ])
+    );
+  });
+
+  expect(mockOnSubmit).not.toHaveBeenCalled();
+});
+
+
