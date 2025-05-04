@@ -9,7 +9,6 @@ export const api = {
     const response = await axios.get(`${API_URL}/transactions`, {
       headers: { 'User-Id': userId }
     });
-    console.log('Transactions:', response.data);
     return response.data;
   },
   

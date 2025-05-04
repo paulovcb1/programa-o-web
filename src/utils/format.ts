@@ -8,8 +8,24 @@ export const formatCurrency = (value: number): string => {
   }).format(value);
 };
 
-export const formatDate = (dateString: string): string => {
-  return format(parseISO(dateString), 'MMM dd, yyyy');
+export const formatDate = (date: string | Date): string => {
+  if (!date) {
+    return 'Data inválida';
+  }
+
+  try {
+    const parsedDate = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(parsedDate.getTime())) {
+      throw new Error('Invalid date');
+    }
+    return parsedDate.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  } catch {
+    return 'Data inválida';
+  }
 };
 
 export const getTotalBalance = (transactions: Transaction[]): number => {
