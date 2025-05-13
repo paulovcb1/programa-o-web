@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Transaction, TransactionFormData, TransactionType } from '../types/transaction';
-import { PlusCircle, MinusCircle } from 'lucide-react';
 
 interface TransactionFormProps {
   onSubmit: (data: TransactionFormData) => void;
   initialData?: Transaction;
   isEditing?: boolean;
+  categories?: { type: TransactionType; name: string }[];
 }
 
 const initialFormState: TransactionFormData = {
@@ -16,105 +16,95 @@ const initialFormState: TransactionFormData = {
   date: new Date().toISOString().split('T')[0]
 };
 
-const categories = [
-  // Income categories
-  { type: 'income', name: 'Salário' },
-  { type: 'income', name: 'Freelance' },
-  { type: 'income', name: 'Investimentos' },
-  { type: 'income', name: 'Presentes' },
-  { type: 'income', name: 'Outras Receitas' },
-  // Expense categories
-  { type: 'expense', name: 'Alimentação' },
-  { type: 'expense', name: 'Moradia' },
-  { type: 'expense', name: 'Transporte' },
-  { type: 'expense', name: 'Lazer' },
-  { type: 'expense', name: 'Saúde' },
-  { type: 'expense', name: 'Educação' },
-  { type: 'expense', name: 'Compras' },
-  { type: 'expense', name: 'Utilidades' },
-  { type: 'expense', name: 'Outras Despesas' },
-];
-
 const TransactionForm: React.FC<TransactionFormProps> = ({ 
   onSubmit, 
   initialData,
-  isEditing = false
+  isEditing = false,
+  categories = []
 }) => {
   const [formData, setFormData] = useState<TransactionFormData>(initialData || initialFormState);
   const [filteredCategories, setFilteredCategories] = useState<string[]>([]);
+  const [errors, setErrors] = useState<string[]>([]);
+  const hasCleanedCategory = useRef(false);
 
-  useEffect(() => {
-    if (initialData) {
-      setFormData({
-        type: initialData.type,
-        amount: initialData.amount,
-        description: initialData.description,
-        category: initialData.category,
-        date: initialData.date.split('T')[0]
-      });
-    }
-  }, [initialData]);
+  // 1. Atualiza categorias filtradas quando tipo muda
+useEffect(() => {
+  const filtered = categories
+    .filter(cat => cat.type === formData.type)
+    .map(cat => cat.name);
 
-  useEffect(() => {
-    const filtered = categories
-      .filter(cat => cat.type === formData.type)
-      .map(cat => cat.name);
-    setFilteredCategories(filtered);
-    
-    if (!filtered.includes(formData.category)) {
-      setFormData(prev => ({ ...prev, category: '' }));
-    }
-  }, [formData.type]);
+  // Apenas atualiza se realmente mudou
+  setFilteredCategories(prev => {
+    const isSame = prev.length === filtered.length && prev.every((val, i) => val === filtered[i]);
+    return isSame ? prev : filtered;
+  });
+}, [categories, formData.type]);
+
+// 2. Limpa categoria inválida se necessário
+useEffect(() => {
+  if (
+    formData.category &&
+    !filteredCategories.includes(formData.category)
+  ) {
+    // Só limpa se necessário
+    setFormData(prev => {
+      if (prev.category === '') return prev;
+      return { ...prev, category: '' };
+    });
+  }
+}, [formData.category, filteredCategories]);
+
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleTypeChange = (type: TransactionType) => {
-    setFormData(prev => ({ ...prev, type }));
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const validationErrors: string[] = [];
+
+    if (!formData.amount || formData.amount <= 0) {
+      validationErrors.push('O campo "Valor" deve ser maior que zero.');
+    }
+    if (!formData.description.trim()) {
+      validationErrors.push('O campo "Descrição" é obrigatório.');
+    }
+    if (!formData.category.trim()) {
+      validationErrors.push('O campo "Categoria" é obrigatório.');
+    }
+    if (!formData.date.trim()) {
+      validationErrors.push('O campo "Data" é obrigatório.');
+    }
+
+    if (validationErrors.length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+
+    setErrors([]);
     onSubmit(formData);
+
     if (!isEditing) {
       setFormData(initialFormState);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 mb-6 transition-all">
+    <form data-testid="transaction-form" onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 mb-6">
       <h2 className="text-xl font-semibold mb-4">
         {isEditing ? 'Editar Transação' : 'Nova Transação'}
       </h2>
-      
-      <div className="flex space-x-2 mb-6">
-        <button
-          type="button"
-          className={`flex items-center justify-center w-1/2 py-2 rounded-md transition-all ${
-            formData.type === 'income'
-              ? 'bg-emerald-100 text-emerald-700 border-2 border-emerald-500'
-              : 'bg-gray-100 text-gray-700 hover:bg-emerald-50'
-          }`}
-          onClick={() => handleTypeChange('income')}
-        >
-          <PlusCircle className="mr-2 h-5 w-5" />
-          Receita
-        </button>
-        <button
-          type="button"
-          className={`flex items-center justify-center w-1/2 py-2 rounded-md transition-all ${
-            formData.type === 'expense'
-              ? 'bg-red-100 text-red-700 border-2 border-red-500'
-              : 'bg-gray-100 text-gray-700 hover:bg-red-50'
-          }`}
-          onClick={() => handleTypeChange('expense')}
-        >
-          <MinusCircle className="mr-2 h-5 w-5" />
-          Despesa
-        </button>
-      </div>
+
+      {errors.length > 0 && (
+        <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+          <ul className="list-disc pl-5">
+            {errors.map((error, index) => (
+              <li key={index}>{error}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="space-y-4">
         <div>
@@ -129,7 +119,6 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
             onChange={handleChange}
             min="0"
             step="0.01"
-            required
             className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
@@ -144,7 +133,6 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
             name="description"
             value={formData.description}
             onChange={handleChange}
-            required
             className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
@@ -158,7 +146,6 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
             name="category"
             value={formData.category}
             onChange={handleChange}
-            required
             className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">Selecione uma categoria</option>
@@ -180,7 +167,6 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
             name="date"
             value={formData.date}
             onChange={handleChange}
-            required
             className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
